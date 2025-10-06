@@ -46,7 +46,7 @@ module.exports = {
             // This is where you can override settings in the config.js file, and as long the gamemode's config doesn't override it.
             PROPERTIES: {
                 // Amount of bots.
-                BOTS: 5,
+                BOTS: 0,
             }
         },
     ],
@@ -223,16 +223,16 @@ module.exports = {
     }],
 
     // How much regular foods can spawn.
-    FOOD_CAP: 70,
+    FOOD_CAP: 200,
 
     // How much nest foods can spawn.
-    FOOD_CAP_NEST: 15,
+    FOOD_CAP_NEST: 35,
 
     // How much enemy foods can spawn.
-    ENEMY_CAP_NEST: 10,
+    ENEMY_CAP_NEST: 20,
 
     // What this does is there a chance that it will spawn food with a group, and the value makes it how much.
-    FOOD_MAX_GROUP_TOTAL: 6,
+    FOOD_MAX_GROUP_TOTAL: 12,
 
     // Default values for gamemode related things.
     // Do not change these, you'll likely break stuff!
