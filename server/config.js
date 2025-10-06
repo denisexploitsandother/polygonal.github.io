@@ -30,14 +30,14 @@ module.exports = {
             LOAD_ON_MAINSERVER: false,
             // This is very important where the host is actually being hosted. Keep in mind that the ports gets changed to 3000, to 3001, and it repeats with the other servers.
             // Keep in mind that if "LOAD_ON_MAINSERVER" is set to true then this code will be replaced with the main server's host instead.
-            HOST: "localhost:3001",
+            HOST: "https://polygoned.onrender.com/",
             // The port where to host from.
             // Keep in mind that if "LOAD_ON_MAINSERVER" is set to true then this code will be replaced with the main server's port instead.
             PORT: 3001,
             // Get the gamemode you want to select with.
             GAMEMODE: ["teams"],
             // The region, can be anything.
-            REGION: "local",
+            REGION: "public",
             // How many players can join until it's full.
             MAX_PLAYERS: 15,
             // The server ID. Example: (<Yourwebsitename>/#<ServerID>)
