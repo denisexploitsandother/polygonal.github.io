@@ -223,13 +223,13 @@ module.exports = {
     }],
 
     // How much regular foods can spawn.
-    FOOD_CAP: 200,
+    FOOD_CAP: 100,
 
     // How much nest foods can spawn.
-    FOOD_CAP_NEST: 20,
+    FOOD_CAP_NEST: 10,
 
     // How much enemy foods can spawn.
-    ENEMY_CAP_NEST: 15,
+    ENEMY_CAP_NEST: 5,
 
     // What this does is there a chance that it will spawn food with a group, and the value makes it how much.
     FOOD_MAX_GROUP_TOTAL: 12,
