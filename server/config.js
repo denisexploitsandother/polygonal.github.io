@@ -11,12 +11,12 @@ module.exports = {
 
     servers: [ // Make sure to change the HOST, PORT and SERVER_ID between servers!
         {
-            share_client_server: true, // Only one server at a time can have this enabled.
+            share_client_server: false, // Only one server at a time can have this enabled.
             // The above is required if your VM (the machine that hosts the website stuff) doesn't support multi-ports and forces everything through the main server.
             // This also overrides the below HOST and PORT settings to be identical to the main server's HOST/PORT (by default, 3000).
 
-            host: "localhost:3001", // Server host location.
-            port: 3001, // The port on the server.
+            host: "polygoned.onrender.com", // Server host location.
+            port: 8080, // The port on the server.
             id: "loc", // (<host>/#<id>)
             featured: false,
 
