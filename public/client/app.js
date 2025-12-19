@@ -867,7 +867,9 @@ import * as socketStuff from "./socketinit.js";
         lagGraph = graph(),
         gapGraph = graph();
 
-
+    // The skill bar dividers
+    let skas = [];
+  
     const ska = (x) => skas[x];
     var getClassUpgradeKey = function (number) {
         switch (number) {
