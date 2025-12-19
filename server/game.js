@@ -12,30 +12,38 @@ let { gamemodeManager } = require("./Game/gamemodeManager.js");
 // Gamemode names
 const getName = (name, gamemodeData) => {
     const nameMap = {
-        teams: "TDM",
+        tdm: `${gamemodeData.teams}TDM`,
         ffa: "FFA",
         tag: "Tag",
-        opentdm: `Open ${gamemodeData.TEAMS}TDM`,
-        // clanwars: "Clan Wars",
+        opentdm: `Open ${gamemodeData.teams}TDM`,
+        clanwars: "Clan Wars",
         trainwars: "Train Wars",
-        old_dreadnoughts: `Old Dreadnoughts ${gamemodeData.TEAMS}TDM`,
+        old_dreadnoughts: `Old Dreadnoughts ${gamemodeData.teams}TDM`,
         nexus: "Nexus",
         blackout: "Blackout",
         outbreak: "Outbreak",
-        space: "space",
+        space: "Space",
+        classic: "Classic",
+        armsRace: "Arms Race",
         siege_blitz: "Siege Blitz",
         siege_citadel: "Siege Citadel",
         siege_fortress: "Siege Fortress",
         siege_og: "OG Siege",
         siege_legacy: "Siege Legacy",
+        assault_bunker: "Assault Bunker",
         assault_booster: "Assault Booster",
+        assault_trenches: "Assault Trenches",
+        assault_line: "Assault Line",
+        assault_eye: "Assault Eye",
+        assault_yinyang: "Assault Yin Yang",
+        assault_acropolis: "Assault Acropolis",
     };
     return nameMap[name]; 
 }
 
 // Here is our actual game server
 class gameServer {
-    constructor(host, port, gamemode, region, webProperties, serverProperties, parentPort, loaderGlobal) {
+    constructor(host, port, gamemode, region, webProperties, serverProperties, isfeatured, parentPort, loaderGlobal) {
         // Override the default settings in Config.js.
         Object.keys(serverProperties).forEach(key => {
             Config[key] = serverProperties[key];
@@ -48,12 +56,13 @@ class gameServer {
         this.webProperties = webProperties;
         this.serverProperties = serverProperties;
         this.name = "Unknown";
+        this.featured = isfeatured;
         this.parentPort = parentPort;
-        this.definitionsCombiner = new definitionCombiner({ groups: fs.readdirSync(path.join(__dirname, './lib/definitions/groups')), addonsFolder: path.join(__dirname, './lib/definitions/tankAddons') });
+        this.definitionsCombiner = new definitionCombiner({ groups: fs.readdirSync(path.join(__dirname, './lib/definitions/groups')), addonsFolder: path.join(__dirname, './lib/definitions/entityAddons') });
         this.loaderGlobal = loaderGlobal;
         // Initalize.
-        this.roomSpeed = Config.gameSpeed;
-        this.runSpeed = Config.runSpeed;
+        this.roomSpeed = Config.game_speed;
+        this.runSpeed = Config.run_speed;
         this.clients = [];
         this.views = [];
         this.minimap = [];
@@ -87,6 +96,7 @@ class gameServer {
             players: this.socketManager.clients.length,
             maxPlayers: this.webProperties.maxPlayers,
             id: this.webProperties.id,
+            featured: this.featured,
             region: this.region,
             gameMode: this.name,
             gameManager: includegameManager ? this : false,
@@ -163,7 +173,7 @@ class gameServer {
         if (!this.parentPort) {
             // Start the server
             this.start();
-            // Send the info to the main server so the client can get the info. (in an expensive way)
+            // Send the info to the main server so the client can get the info. (in a expensive way)
             for (let i = 0; i < global.servers.length; i++) {
                 let server = global.servers[i];
                 if (server.loadedViaMainServer) global.servers[i] = this.getInfo(true);
@@ -183,15 +193,16 @@ class gameServer {
         this.loaderGlobal.loadRooms(false);
 
         // Also load all mockups if needed.
-        if (Config.LOAD_ALL_MOCKUPS) global.loadAllMockups(false);
+        if (Config.load_all_mockups) global.loadAllMockups(false);
 
         // Now start the server and send data!
         this.start();
 
+        // If no errors has accoured then annouce that the game server has succssfully booted up.
+        console.log("Game server " + this.name + " successfully booted up. Listening on port", this.port);
+
         // Send the info to the main server so the client can get the info.
         this.parentPort.postMessage([false, this.getInfo()]);
-
-        console.log("Game server " + this.name + " successfully booted up. Listening on port", this.port);
 
         // let the main server know that it successfully booted.
         this.parentPort.postMessage(["doneLoading"]);
@@ -206,10 +217,10 @@ class gameServer {
             for (let gamemode of this.gamemode) {
                 let mode = require(`./Game/gamemodeconfigs/${gamemode}.js`);
                 for (let key in mode) {
-                    if (key == "DO_NOT_OVERRIDE_ROOM") {
+                    if (key == "do_not_override_room") {
                         overrideRoom = mode[key];
-                    } else if (key == "ROOM_SETUP") {
-                        if (!overrideRoom) Config.ROOM_SETUP = mode[key]; else Config[key].push(...mode[key]);
+                    } else if (key == "room_setup") {
+                        if (!overrideRoom) Config.room_setup = mode[key]; else Config[key].push(...mode[key]);
                     } else {
                         Config[key] = mode[key];
                     }
@@ -217,14 +228,15 @@ class gameServer {
             };
             // Update the server gamemode name
             this.name = this.gamemode.map(x => getName(x, Config) || (x[0].toUpperCase() + x.slice(1))).join(' ');
+            // Activate laby food if enabled
+            if (Config.tiered_food) global.activateTieredFood();
             // Initalize the room
             this.setRoom();
             setTimeout(() => {
                 // Set the gamemode manager
                 this.gamemodeManager.redefine(this);
                 // Wake it up
-                setTimeout(() => this.gamemodeManager.request("start"), 100);
-                //console.log(ensureIsClass("healerSymbol"))
+                this.gamemodeManager.request("start");
             }, 200);
 
             // Check if we have a server travel properties.
@@ -265,12 +277,10 @@ class gameServer {
             };
 
 
-            setTimeout(() => {
-                // Set the gamemode manager again.
-                this.gamemodeManager.redefine(this);
-                // Wake up gamemode manager
-                this.gamemodeManager.request("start");
-            }, 200);
+            // Set the gamemode manager again.
+            this.gamemodeManager.redefine(this);
+            // Wake up gamemode manager
+            this.gamemodeManager.request("start");
         }
 
         // Run the server
@@ -298,10 +308,10 @@ class gameServer {
         };
         if (!this.wallGrid) {
             this.room.wallGrid = {
-                xgrid: Config.SANDBOX ? 10 : 15,
-                ygrid: Config.SANDBOX ? 10 : 15,
-                width: Config.SANDBOX ? 600 : 900,
-                height: Config.SANDBOX ? 600 : 900,
+                xgrid: Config.sandbox ? 10 : 15,
+                ygrid: Config.sandbox ? 10 : 15,
+                width: Config.sandbox ? 600 : 900,
+                height: Config.sandbox ? 600 : 900,
                 getGrid: (location) => {
                     let x = Math.floor((location.x + this.room.wallGrid.width / 2) * this.room.wallGrid.xgrid / this.room.wallGrid.width);
                     let y = Math.floor((location.y + this.room.wallGrid.height / 2) * this.room.wallGrid.ygrid / this.room.wallGrid.height);
@@ -370,23 +380,23 @@ class gameServer {
     setRoomProperties() {
         // It's size
         Object.defineProperties(this.room, {
-            tileWidth: { get: () => Config.TILE_WIDTH, set: v => Config.TILE_WIDTH = v },
-            tileHeight: { get: () => Config.TILE_HEIGHT, set: v => Config.TILE_HEIGHT = v },
-            width: { get: () => this.room.xgrid * Config.TILE_WIDTH, set: v => Config.TILE_WIDTH = v / this.room.xgrid },
-            height: { get: () => this.room.ygrid * Config.TILE_HEIGHT, set: v => Config.TILE_HEIGHT = v / this.room.ygrid }
+            tileWidth: { get: () => Config.map_tile_width, set: v => Config.map_tile_width = v },
+            tileHeight: { get: () => Config.map_tile_height, set: v => Config.map_tile_height = v },
+            width: { get: () => this.room.xgrid * Config.map_tile_width, set: v => Config.map_tile_width = v / this.room.xgrid },
+            height: { get: () => this.room.ygrid * Config.map_tile_height, set: v => Config.map_tile_height = v / this.room.ygrid }
         });
 
         // And center
         Object.defineProperties(this.room.center, {
-            x: { get: () => this.room.xgrid * Config.TILE_WIDTH / 2 - this.room.width / 2, set: v => Config.TILE_WIDTH = v * 2 / this.room.xgrid - this.room.width / 2 },
-            y: { get: () => this.room.ygrid * Config.TILE_HEIGHT / 2 - this.room.height / 2, set: v => Config.TILE_HEIGHT = v * 2 / this.room.ygrid - this.room.height / 2 }
+            x: { get: () => this.room.xgrid * Config.map_tile_width / 2 - this.room.width / 2, set: v => Config.map_tile_width = v * 2 / this.room.xgrid - this.room.width / 2 },
+            y: { get: () => this.room.ygrid * Config.map_tile_height / 2 - this.room.height / 2, set: v => Config.map_tile_height = v * 2 / this.room.ygrid - this.room.height / 2 }
         });
     }
 
     // Set up the room
     setRoom() {
         // Get the room setup(s)
-        for (let filename of Config.ROOM_SETUP) {
+        for (let filename of Config.room_setup) {
             // ... get the current setup
             this.currentRoom = require(`./Game/room_setup/rooms/${filename}.js`);
             Config.roomHeight = this.currentRoom.length;
@@ -422,7 +432,7 @@ class gameServer {
         // Update all the entities
         for (let entity of entities.values()) {
             let tile = this.room.getAt(entity);
-            if (tile && !entity.godmode && !entity.bond) tile.entities.push(entity);
+            if (tile && !entity.godmode && !entity.bond && !entity.immuneToTiles) tile.entities.push(entity);
         }
         // Update all the tiles
         for (let y = 0; y < this.room.setup.length; y++) {
@@ -472,7 +482,7 @@ class gameServer {
                         FULL_VIEW: true,
                         SKYNET: true,
                         BLIND: true,
-                        LIKES_SHAPES: true,
+                        CHASE: true,
                     },
                     CONTROLLERS: [["nearestDifferentMaster", { lockThroughWalls: true }], "mapTargetToGoal"],
                     SKILL: Array(10).fill(9),
@@ -499,7 +509,7 @@ class gameServer {
             let alive = false;
             for (const instance of entities.values()) {
                 if (
-                    (instance.isPlayer && !instance.invuln) || instance.isMothership ||
+                    (instance.isPlayer && !instance.invuln && !instance.godmode) || instance.isMothership ||
                     instance.isBot ||
                     (instance.isDominator && instance.team !== TEAM_ENEMIES)
                 ) {

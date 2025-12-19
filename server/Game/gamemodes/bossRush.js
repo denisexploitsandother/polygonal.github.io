@@ -1,8 +1,6 @@
-const { triAngle } = require("../../lib/definitions/gunvals");
-
 let calculatePoints = wave => 5 + wave * 3;
 // Each wave has a certain amount of "points" that it can spend on bosses, calculated above.
-// Each boss costs a number of points.
+// Each boss costs an amount of points.
 // It will always buy as many bosses until it has no points or else can't spend them.
 // It picks a boss to buy by filtering the list of boss choices by if they are affordable.
 // Then it picks a boss at random, with all choices being equally likely.
@@ -99,11 +97,37 @@ class bossRush {
             [ 50, "zaphkiel"],
             [ 50, "nyx"],
             [ 50, "theia"],
+            [ 50, "atlas"],
+            [ 50, "hera"],
+            [ 50, "horus"],
+            [ 50, "anubis"],
+            [ 50, "isis"],
+            [ 50, "tethys"],
+            [ 50, "ullr"],
+            [ 50, "dellingr"],
+            [ 50, "osiris"],
+            [ 50, "alcis"],
+            [ 50, "khonsu"],
+            [ 50, "hyperion"],
+            [ 50, "nephthys"],
+            [ 50, "tyr"],
+            [ 50, "vor"],
+            [ 50, "aether"],
+            [ 50, "iapetus"],
+            [ 50, "baldr"],
+            [ 50, "eros"],
+            [ 50, "hjordis"],
+            [ 50, "sif"],
+            [ 50, "freyr"],
+            [ 50, "styx"],
+            [ 50, "apollo"],
+            [ 50, "ptah"],
 
             //eternals
-            [100, "legionaryCrasherFix" /*fucking mid*/],
+            [100, "legionaryCrasherFix"], // fucking mid
             [100, "kronos"],
             [100, "ragnarok"],
+            [100, "amun"],
         ];
         this.friendlyBossChoices = ["roguePalisade", "rogueArmada", "julius", "genghis", "napoleon"];
         this.bigFodderChoices = ["sentryGun", "sentrySwarm", "sentryTrap", "shinySentryGun"];
@@ -112,7 +136,7 @@ class bossRush {
         this.defineProperties();
     }
     defineProperties() {
-        this.length = Config.CLASSIC_SIEGE ? this.waveCodes.length : Config.WAVES;
+        this.length = Config.use_limited_waves ? this.waveCodes.length : Config.wave_cap;
         this.waves = this.generateWaves();
         this.waveId = 52;
         this.gameActive = false;
@@ -136,7 +160,7 @@ class bossRush {
                 wave.push(boss);
             }
 
-            waves.push(Config.CLASSIC_SIEGE ? this.waveCodes[i] : wave);
+            waves.push(Config.use_limited_waves ? this.waveCodes[i] : wave);
         }
         return waves;
     }
@@ -149,7 +173,7 @@ class bossRush {
         if (addToSanctuaryList) this.sanctuaries.push(o);
         o.on('dead', () => {
             if (o.team === TEAM_ENEMIES) {
-                // Allow the player to spawn, so we add it to the spawnable locations.
+                // Allow the player to spawn so we add it to the spawnable locations.
                 this.room.spawnable[TEAM_BLUE].push(tile);
                 this.spawnSanctuary(tile, TEAM_BLUE, `sanctuaryTier${this.sanctuaryTier}`);
                 tile.color = "blue";
@@ -157,7 +181,7 @@ class bossRush {
                 this.leftSanctuaries++;
                 global.gameManager.socketManager.broadcast('A sanctuary has been restored!');
             } else {
-                // Don't allow players to spawn at the destroyed sanctuary, so we remove it from spawnable location.
+                // Don't allow players to spawn at the destroyed sanctuary so we remove it from spawnable location.
                 if (this.gameActive) util.remove(this.room.spawnable[TEAM_BLUE], this.room.spawnable[TEAM_BLUE].indexOf(tile));
                 util.remove(this.sanctuaries, this.sanctuaries.indexOf(o));
                 let newTeam = TEAM_ENEMIES;
@@ -198,7 +222,7 @@ class bossRush {
         entity.color.base = customName && customName === "DESTROYED" ? "grey" : getTeamColor(entity.team);
         entity.skill.score = 111069;
         entity.name = `${customName ? customName : getTeamName(entity.team)} Sanctuary`;
-        entity.SIZE = this.room.tileWidth / Config.SANCTUARY_SIZE ?? 13.5;
+        entity.SIZE = this.room.tileWidth / Config.sanctuary_size ?? 13.5;
         entity.isDominator = true;
         entity.displayName = true;
         entity.nameColor = "#ffffff";
@@ -232,7 +256,7 @@ class bossRush {
         enemy.refreshSkills();
         enemy.refreshBodyAttributes();
         enemy.isBoss = true;
-        if (Config.FORTRESS || Config.CITADEL) enemy.controllers.push(new ioTypes.bossRushAI(enemy, {}, global.gameManager));
+        if (Config.fortress || Config.citadel) enemy.controllers.push(new ioTypes.bossRushAI(enemy, {}, global.gameManager));
         this.remainingEnemies++;
         enemy.on('dead', () => {
             //this enemy has been killed, decrease the remainingEnemies counter
@@ -258,7 +282,7 @@ class bossRush {
             enemy.define({ DANGER: 25 + enemy.SIZE / 5 });
         }
 
-        if (!Config.CLASSIC_SIEGE) {
+        if (!Config.use_limited_waves) {
             //spawn fodder enemies
             for (let i = 0; i < this.waveId / 5; i++) {
                 this.spawnEnemyWrapper(ran.choose(global.gameManager.room.spawnable["bossSpawnTile"]).randomInside(), ran.choose(this.sentinelChoices));
@@ -282,6 +306,26 @@ class bossRush {
     // runs once when the server starts
     start(mazeType) {
         this.gameActive = true;
+        // Replace/remove certain tanks.
+        for (let i = 0; i < Class.basic.UPGRADES_TIER_2.length; i++) {
+            let string = Class.basic.UPGRADES_TIER_2[i];
+            if (string === "smasher") {
+                Class.basic.UPGRADES_TIER_2[i] = "healer"
+                for (let i = 0; i < Class.menu_unused.UPGRADES_TIER_0.length; i++) {
+                    let string = Class.menu_unused.UPGRADES_TIER_0[i];
+                    if (string === "healer") {
+                        Class.menu_unused.UPGRADES_TIER_0[i] = "smasher"
+                    }
+                }
+            }
+        }
+        for (let i = 0; i < Class.director.UPGRADES_TIER_2.length; i++) {
+            let string = Class.director.UPGRADES_TIER_2[i];
+            if (string === "underseer") {
+                Class.director.UPGRADES_TIER_2.splice(i, 1)
+                Class.menu_unused.UPGRADES_TIER_0.push("underseer")
+            }
+        }
         for (let tile of this.room.spawnable[TEAM_BLUE]) {
             tile.color = tile.bluePrint.COLOR;
             this.leftSanctuaries += 1;
@@ -298,9 +342,18 @@ class bossRush {
                 })
                 wall.define("wall");
                 wall.SIZE = global.gameManager.room.width / width / 2 * element.size / lazyRealSizes[4] * Math.SQRT2 - 2;
+                wall.life();
                 wall.protect();
                 makeHitbox(wall);
                 walls.push(wall);
+                if (Config.spooky_theme) {
+                    let eyeSize = 12 * (Math.random() + 0.45);
+                    let spookyEye = new Entity({ x: wall.x + (wall.size - eyeSize * 2) * Math.random() - wall.size / 2, y: wall.y + (wall.size - eyeSize * 2) * Math.random() - wall.size / 2 })
+                    spookyEye.define("hwEye");
+                    spookyEye.define({FACING_TYPE: ["manual", {angle: ran.randomAngle()}]})
+                    spookyEye.SIZE = eyeSize;
+                    spookyEye.minimapColor = 18;
+                }
             });
         }
     }
@@ -316,22 +369,22 @@ class bossRush {
 
     // runs every second
     loop() {
-        // If the game isn't active, then don't run the rest of the code.
+        // If the game isnt active, then dont run the rest of the code.
         if (global.gameManager.arenaClosed) this.gameActive = false;
         if (!this.gameActive) return;
-        //the timer has run out? reset the timer and spawn the next wave
+        //the timer has ran out? reset timer and spawn the next wave
         if (this.timer <= 0) {
             this.timer = 3; // 5 seconds
             this.waveId++;
             if (this.waves[this.waveId]) {
                 this.spawnWave(this.waveId);
 
-            //if there is no next wave, then simply let the players win
+            //if there is no next wave then simply let the players win
             } else {
                 this.playerWin();
             }
 
-        //if the timer has not run out and there aren't any remaining enemies left, decrease the timer
+        //if the timer has not ran out and there arent any remaining enemies left, decrease the timer
         } else if (!this.remainingEnemies) {
             this.timer--;
         }

@@ -1,6 +1,6 @@
-const { MAX_SKILL } = require("../../config.js")
+const { skill_cap } = require("../../config.js")
 const g = require('./gunvals.js')
-const {basePolygonDamage, basePolygonHealth} = require("./constants");
+const { basePolygonDamage, basePolygonHealth, dfltskl } = require("./constants")
 let skcnv = {
     atk: 6,
     spd: 4,
@@ -75,7 +75,7 @@ exports.skillSet = (args) => {
     let skills = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     for (let s in args) {
         if (!args.hasOwnProperty(s)) continue;
-        skills[skcnv[s]] = Math.round(MAX_SKILL * args[s]);
+        skills[skcnv[s]] = Math.round(skill_cap * args[s]);
     }
     return skills;
 }
@@ -123,7 +123,7 @@ exports.makeGuard = (type, name = -1) => {
     output.LABEL = name == -1 ? type.LABEL + " Guard" : name;
     return output;
 }
-exports.addBackGunner = (type, name = -1) => {
+exports.makeRearGunner = (type, name = -1) => {
     type = ensureIsClass(type);
     let output = exports.dereference(type);
     let cannons = [{
@@ -208,79 +208,68 @@ exports.makeOver = (type, name = -1, options = {}) => {
     let cycle = options.cycle ?? true;
     let maxChildren = options.maxDrones ?? 3;
     let stats = options.extraStats ?? [];
-    let spawnerProperties = {
-        SHOOT_SETTINGS: exports.combineStats([g.drone, g.overseer, ...stats]),
-        TYPE: ["drone", {INDEPENDENT: independent}],
-        AUTOFIRE: true,
-        SYNCS_SKILLS: true,
-        STAT_CALCULATOR: "drone",
-        WAIT_TO_CYCLE: cycle,
-        MAX_CHILDREN: maxChildren,
-    };
+    let spawnerType = options.spawnerType;
 
     let spawners = [];
-    if (count % 2 == 1) {
-        spawners.push({
-            POSITION: [6, 12, 1.2, 8, 0, 180, 0],
-            PROPERTIES: spawnerProperties,
-        })
-    }
-    for (let i = 2; i <= (count - count % 2); i += 2) {
-        spawners.push({
-            POSITION: [6, 12, 1.2, 8, 0, 180 - angle * i / 2, 0],
-            PROPERTIES: spawnerProperties,
-        }, {
-            POSITION: [6, 12, 1.2, 8, 0, 180 + angle * i / 2, 0],
-            PROPERTIES: spawnerProperties,
-        })
+    if (spawnerType == "swarm") {
+        let spawnerProperties = {
+            SHOOT_SETTINGS: exports.combineStats([g.swarm, ...stats]),
+            TYPE: independent ? "autoswarm" : "swarm",
+            STAT_CALCULATOR: "swarm",
+        }
+        if (count % 2 == 1) {
+            spawners.push({
+                POSITION: [7, 7.5, 0.6, 7, 4, 180, 0],
+                PROPERTIES: spawnerProperties,
+            }, {
+                POSITION: [7, 7.5, 0.6, 7, -4, 180, 0.5],
+                PROPERTIES: spawnerProperties,
+            })
+        }
+        for (let i = 2; i <= (count - count % 2); i += 2) {
+            spawners.push({
+                POSITION: [7, 7.5, 0.6, 7, 4, 180 - angle * i / 2, 0],
+                PROPERTIES: spawnerProperties,
+            }, {
+                POSITION: [7, 7.5, 0.6, 7, -4, 180 - angle * i / 2, 0.5],
+                PROPERTIES: spawnerProperties,
+            }, {
+                POSITION: [7, 7.5, 0.6, 7, 4, 180 + angle * i / 2, 0],
+                PROPERTIES: spawnerProperties,
+            }, {
+                POSITION: [7, 7.5, 0.6, 7, -4, 180 + angle * i / 2, 0.5],
+                PROPERTIES: spawnerProperties,
+            })
+        }
+    } else {
+        let spawnerProperties = {
+            SHOOT_SETTINGS: exports.combineStats([g.drone, g.overseer, ...stats]),
+            TYPE: ["drone", {INDEPENDENT: independent}],
+            AUTOFIRE: true,
+            SYNCS_SKILLS: true,
+            STAT_CALCULATOR: "drone",
+            WAIT_TO_CYCLE: cycle,
+            MAX_CHILDREN: maxChildren,
+        }
+        if (count % 2 == 1) {
+            spawners.push({
+                POSITION: [6, 12, 1.2, 8, 0, 180, 0],
+                PROPERTIES: spawnerProperties,
+            })
+        }
+        for (let i = 2; i <= (count - count % 2); i += 2) {
+            spawners.push({
+                POSITION: [6, 12, 1.2, 8, 0, 180 - angle * i / 2, 0],
+                PROPERTIES: spawnerProperties,
+            }, {
+                POSITION: [6, 12, 1.2, 8, 0, 180 + angle * i / 2, 0],
+                PROPERTIES: spawnerProperties,
+            })
+        }
     }
     
     output.GUNS = type.GUNS == null ? spawners : type.GUNS.concat(spawners);
     output.LABEL = name == -1 ? "Over" + type.LABEL.toLowerCase() : name;
-    return output;
-}
-exports.makeBattle = (type, name = -1, options = {}) => {
-    type = ensureIsClass(type);
-    let output = exports.dereference(type);
-
-    let angle = 180 - (options.angle ?? 125);
-    let count = options.count ?? 2;
-    let independent = options.independent ?? false;
-    let stats = options.extraStats ?? [];
-    let spawnerProperties = {
-        SHOOT_SETTINGS: exports.combineStats([g.swarm, ...stats]),
-        TYPE: independent ? "autoswarm" : "swarm",
-        STAT_CALCULATOR: "swarm",
-    };
-
-    let spawners = [];
-    if (count % 2 == 1) {
-        spawners.push({
-            POSITION: [7, 7.5, 0.6, 7, 4, 180, 0],
-            PROPERTIES: spawnerProperties,
-        }, {
-            POSITION: [7, 7.5, 0.6, 7, -4, 180, 0.5],
-            PROPERTIES: spawnerProperties,
-        })
-    }
-    for (let i = 2; i <= (count - count % 2); i += 2) {
-        spawners.push({
-            POSITION: [7, 7.5, 0.6, 7, 4, 180 - angle * i / 2, 0],
-            PROPERTIES: spawnerProperties,
-        }, {
-            POSITION: [7, 7.5, 0.6, 7, -4, 180 - angle * i / 2, 0.5],
-            PROPERTIES: spawnerProperties,
-        }, {
-            POSITION: [7, 7.5, 0.6, 7, 4, 180 + angle * i / 2, 0],
-            PROPERTIES: spawnerProperties,
-        }, {
-            POSITION: [7, 7.5, 0.6, 7, -4, 180 + angle * i / 2, 0.5],
-            PROPERTIES: spawnerProperties,
-        })
-    }
-    
-    output.GUNS = type.GUNS == null ? spawners : type.GUNS.concat(spawners);
-    output.LABEL = name == -1 ? "Battle" + type.LABEL.toLowerCase() : name;
     return output;
 }
 
@@ -293,6 +282,7 @@ exports.makeAuto = (type, name = -1, options = {}) => {
         independent: true,
         color: 16,
         angle: 180,
+        total: 1,
     };
     if (options.type != null) {
         turret.type = options.type;
@@ -309,9 +299,17 @@ exports.makeAuto = (type, name = -1, options = {}) => {
     if (options.angle != null) {
         turret.angle = options.angle;
     }
+    if (options.total != null) {
+        turret.total = options.total;
+    }
     let output = exports.dereference(type);
-    let autogun = {
-        POSITION: [turret.size, 0, 0, turret.angle, 360, 1],
+    let autogun = exports.weaponArray({
+        POSITION: {
+            SIZE: turret.size,
+            ANGLE: turret.angle,
+            ARC: 360 / turret.total,
+            LAYER: 1
+        },
         TYPE: [
             turret.type,
             {
@@ -320,19 +318,21 @@ exports.makeAuto = (type, name = -1, options = {}) => {
                 COLOR: turret.color,
             },
         ],
-    };
+    }, turret.total);
     if (type.GUNS != null) {
         output.GUNS = type.GUNS;
     }
     if (type.TURRETS == null) {
-        output.TURRETS = [autogun];
+        output.TURRETS = [...autogun];
     } else {
-        output.TURRETS = [...type.TURRETS, autogun];
+        output.TURRETS = [...type.TURRETS, ...autogun];
     }
     if (name == -1) {
         output.LABEL = "Auto-" + type.LABEL;
+        output.UPGRADE_LABEL = "Auto-" + type.LABEL;
     } else {
         output.LABEL = name;
+        output.UPGRADE_LABEL = name;
     }
     output.DANGER = type.DANGER + 1;
     return output;
@@ -472,7 +472,7 @@ exports.makeTurret = (type, options = {}) => {
     - canRepel: whether or not the auto turret can fire backwards with secondary fire
     - limitFov: whether or not the auto turret should bother to try to limit its FOV arc
     - hasAI: whether or not the auto turret can think and shoot on its own
-    - extraStats: array of stats to append onto the shoot settings of all the turret's guns
+    - extraStats: array of stats to append onto the shoot settings of all of the turret's guns
     - label: turret label
     - color: turret color
     - fov: turret FOV
@@ -519,7 +519,7 @@ exports.makeTurret = (type, options = {}) => {
         TURRETS: type.TURRETS,
     }
 }
-exports.addAura = (damageFactor = 1, sizeFactor = 1, opacity = 0.3, auraColor) => {
+exports.makeAura = (damageFactor = 1, sizeFactor = 1, opacity = 0.3, auraColor) => {
     let isHeal = damageFactor < 0;
     let auraType = isHeal ? "healAura" : "aura";
     let symbolType = isHeal ? "healerSymbol" : "auraSymbol";
@@ -549,6 +549,7 @@ exports.addAura = (damageFactor = 1, sizeFactor = 1, opacity = 0.3, auraColor) =
         ]
     };
 }
+
 exports.setTurretProjectileRecoil = (type, recoilFactor) => {
     type = exports.dereference(type);
 
@@ -580,9 +581,13 @@ exports.setTurretProjectileRecoil = (type, recoilFactor) => {
 }
 
 // misc functions
-exports.menu = (name = -1, color = -1, shape = 0, overrideGuns = false) => {
+exports.makeMenu = (name = -1, color = "mirror", shape = 0, overrideLabel = false, overrideGuns = false) => {
     let defaultGun = {
-        POSITION: [18, 10, -1.4, 0, 0, 0, 0],
+        POSITION: {
+            LENGTH: 18,
+            WIDTH: 10,
+            ASPECT: -1.4
+        },
         PROPERTIES: {
             SHOOT_SETTINGS: exports.combineStats([g.basic]),
             TYPE: "bullet",
@@ -592,10 +597,12 @@ exports.menu = (name = -1, color = -1, shape = 0, overrideGuns = false) => {
         PARENT: "genericTank",
         LABEL: name == -1 ? undefined : name,
         GUNS: overrideGuns ? overrideGuns : [defaultGun],
-        COLOR: color == -1 ? null : color,
-        UPGRADE_COLOR: color == -1 ? null : color,
+        COLOR: color == "mirror" ? null : color,
+        UPGRADE_COLOR: color == "mirror" ? null : color,
         SHAPE: shape,
         IGNORED_BY_AI: true,
+        SKILL_CAP: Array(10).fill(dfltskl),
+        RESET_CHILDREN: true,
     };
 }
 exports.weaponArray = (weapons, count, delayIncrement = 0, delayOverflow = false) => {
@@ -629,6 +636,34 @@ exports.weaponArray = (weapons, count, delayIncrement = 0, delayOverflow = false
             }
             output.push(newWeapon);
         }
+    }
+    return output;
+}
+exports.weaponMirror = (weapons, delayIncrement = 0.5, delayOverflow = false) => {
+    // delayIncrement: how much each side's delay increases by
+    // delayOverflow: false to constrain the delay value between [0, 1)
+    if (!Array.isArray(weapons)) {
+        weapons = [weapons]
+    }
+    let yKey = 4;
+    let angleKey = 5;
+    let delayKey = 6;
+
+    let output = [];
+    for (let weapon of weapons) {
+        let newWeapon = exports.dereference(weapon);
+
+        if (!Array.isArray(newWeapon.POSITION)) {
+            yKey = "Y";
+            angleKey = "ANGLE";
+            delayKey = "DELAY";
+        }
+
+        newWeapon.POSITION[yKey] = (newWeapon.POSITION[yKey] ?? 0) * -1;
+        newWeapon.POSITION[angleKey] = (newWeapon.POSITION[angleKey] ?? 0) * -1;
+        newWeapon.POSITION[delayKey] = (newWeapon.POSITION[delayKey] ?? 0) + delayIncrement;
+        output.push(weapon, newWeapon);
+
     }
     return output;
 }
@@ -700,14 +735,14 @@ exports.makeRelic = (type, scale = 1, gem, SIZE, yBase = 8.25) => {
     let relicCasing = {
         PARENT: 'genericEntity',
         LABEL: 'Relic Casing',
-        LEVEL_CAP: 45,
+        level_cap: 45,
         COLOR: type.COLOR,
         MIRROR_MASTER_ANGLE: true,
         SHAPE: [[-0.4,-1],[0.4,-0.25],[0.4,0.25],[-0.4,1]].map(r => r.map(s => s * scale))
     }, relicBody = {
         PARENT: 'genericEntity',
         LABEL: 'Relic Mantle',
-        LEVEL_CAP: 45,
+        level_cap: 45,
         COLOR: type.COLOR,
         MIRROR_MASTER_ANGLE: true,
         SHAPE: type.SHAPE
@@ -833,39 +868,83 @@ exports.makeRare = (type, level) => {
     }
 }
 
-exports.makeLaby = (type, level, baseScale = 1) => {
+const labyTierToHealth = {
+    0: 0.25,
+    1: 10,
+    2: 20,
+    3: 150,
+    4: 300
+};
+
+// not accurate values
+const labyRarityToScore = {
+    1: 5,
+    2: 10,
+    3: 40,
+    4: 100,
+    5: 250
+};
+
+const labyRarityToHealth = {
+    1: 2,
+    2: 4,
+    3: 6,
+    4: 8,
+    5: 10
+};
+
+exports.makeLaby = (type, tier, rarity, level, baseScale = 1) => {
     type = ensureIsClass(type);
     let usableSHAPE = Math.max(type.SHAPE, 3),
         downscale = Math.cos(Math.PI / usableSHAPE),
-        strengthMultiplier = 5 ** level;
+        healthMultiplier = Math.pow(5, level) - (level > 2 ? Math.pow(5, level) / Math.pow(5, level - 2) : 0);
     return {
-        PARENT: "food",
-        LABEL: ["", "Beta ", "Alpha ", "Omega ", "Gamma ", "Delta "][level] + type.LABEL,
-        VALUE: type.VALUE * strengthMultiplier,
+        PARENT: 'food',
+        LABEL: ['', 'Beta ', 'Alpha ', 'Omega ', 'Gamma ', 'Delta '][level] + type.LABEL,
+        VALUE: util.getReversedJackpot(
+            Math.min(
+                5e6,
+                (tier == 0
+                    ? 30 * (level > 1 ? Math.pow(6, level - 1) : level) + 8
+                    : 30 * Math.pow(5, tier + level - 1)) *
+                    (labyRarityToScore[rarity] || 1)
+            )
+        ),
         SHAPE: type.SHAPE,
-        SIZE: type.SIZE * baseScale / downscale ** level,
+        SIZE: (type.SIZE * baseScale) / downscale ** level,
         COLOR: type.COLOR,
         ALPHA: type.ALPHA ?? 1,
         BODY: {
             DAMAGE: type.BODY.DAMAGE,
             DENSITY: type.BODY.DENSITY,
-            HEALTH: type.BODY.HEALTH * strengthMultiplier,
+            HEALTH:
+                (labyTierToHealth[tier] || 1) *
+                healthMultiplier *
+                (labyRarityToHealth[rarity] || 1),
             PENETRATION: type.BODY.PENETRATION,
-            PUSHABILITY: (type.BODY.PUSHABILITY / (level + 1)) || 0,
-            ACCELERATION: type.BODY.ACCELERATION
+            PUSHABILITY: type.BODY.PUSHABILITY / (level + 1) || 0,
+            ACCELERATION: type.BODY.ACCELERATION,
+            SHIELD: 1e-9,
+            REGEN: 1e-18
         },
         INTANGIBLE: type.INTANGIBLE,
         VARIES_IN_SIZE: false,
-        DRAW_HEALTH: type.DRAW_HEALTH,
+        DRAW_HEALTH: type.DRAW_HEALTH && tier != 0,
         GIVE_KILL_MESSAGE: type.GIVE_KILL_MESSAGE || level > 1,
         GUNS: type.GUNS ?? [],
         TURRETS: type.TURRETS ?? [],
         PROPS: Array(level).fill().map((_, i) => ({
-            POSITION: [20 * downscale ** (i + 1), 0, 0, !(i & 1) ? 180 / usableSHAPE : 0, 1],
+            POSITION: [
+                20 * downscale ** (i + 1),
+                0,
+                0,
+                !(i & 1) ? 180 / usableSHAPE : 0,
+                1
+            ],
             TYPE: [type, { COLOR: 'mirror' }]
         }))
     };
-}
+};
 exports.makeRarities = (type) => {
     const ct = type.charAt(0).toUpperCase() + type.slice(1);
     const rarities = ["shiny", "legendary", "shadow", "rainbow", "trans"];
@@ -873,9 +952,6 @@ exports.makeRarities = (type) => {
         const pn = `${rarities[i]}${ct}`;
         Class[pn] = exports.makeRare(`${type}`, [i]);
     }
-}
-exports.calcAspect = (oWidth /*Original*/ , eWidth /*expected*/ ) => {
-    return eWidth / oWidth
 }
 
 //merry Christmas

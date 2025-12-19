@@ -6,7 +6,6 @@ window.fakeLagMS = 0;
 var sync = [];
 var clockDiff = 0;
 var serverStart = 0;
-var startedSync = false;
 let levelscore = 0;
 let deduction = 0;
 let level = 1;
@@ -51,7 +50,7 @@ gui = {
     playerid: -1,
     __s: {
         setScore: d => {
-            sscore.set(d);
+            d ? (sscore.set(d), deduction > sscore.get() && (deduction = level = 0)) : (levelscore = 3, deduction = level = 0, sscore = util.AdvancedSmoothBar(0, 2))
         },
         setKills: (solo, assists, bosses) => {
             kills = [solo, assists, bosses];
@@ -75,6 +74,8 @@ gui = {
     type: 0,
     root: "",
     class: "",
+    visibleEntities: false,
+    dailyTank: {tank: null, ads: false},
     fps: 0,
     color: 0,
     accel: 0,
@@ -237,7 +238,7 @@ const Entry = class {
     publish() {
         let indexes = this.index.split("-"),
             ref = global.mockups[parseInt(indexes[0])];
-            if (!ref) ref = global.missingMockup[0];
+            if (!ref) ref = global.missingno[0];
 
         return {
             id: this.id,
@@ -270,7 +271,6 @@ const Leaderboard = class {
         };
     }
     update(elements) {
-        global.loggers.processLeaderboard.set();
         elements.sort((a, b) => b.score - a.score);
         for (let value of Object.values(this.entries)) value.old = true;
         for (let element of elements)
@@ -278,7 +278,6 @@ const Leaderboard = class {
             else this.entries[element.id] = new Entry(element);
         for (let [id, value] of Object.entries(this.entries))
             if (value.old) delete this.entries[id];
-        global.loggers.processLeaderboard.mark();
     }
 };
 let minimapAllInt = new Integrate(5),
@@ -440,8 +439,7 @@ function Status() {
 }
 // Make a converter
 const process = (z = {}) => {
-    global.loggers.processEntities.set();
-    let isNew = z.facing == null; // For whatever reason, arguments.length is uglified poorly...
+    let isNew = z.facing == null; // For whatever reason arguments.length is uglified poorly...
     // Figure out what kind of data we're looking at
     let type = get.next();
     // Handle it appropiately
@@ -460,7 +458,7 @@ const process = (z = {}) => {
     } else { // issa something real
         z.interval = global.metrics.rendergap;
         z.id = get.next();
-        // Determine if this is a new entity or if we already know about it
+        // Determine if this is an new entity or if we already know about it
         let i = global.entities.findIndex(x => x.id === z.id);
         if (i !== -1) {
             // remove it if needed (this way we'll only be left with the dead/unused entities)
@@ -620,7 +618,6 @@ const process = (z = {}) => {
             tur = process(tur);
         }
     }
-    global.loggers.processEntities.mark();
     // Return our monsterous creation
     return z;
 };
@@ -664,6 +661,8 @@ const convert = {
         let index = get.next(),
             // Translate the encoded index
             indices = {
+                dailyTank: index & 0x1000,
+                visibleName: index & 0x0800,
                 class: index & 0x0400,
                 root: index & 0x0200,
                 topspeed: index & 0x0100,
@@ -732,6 +731,14 @@ const convert = {
         if (indices.class) {
             gui.class = get.next();
         }
+        if (indices.visibleName) {
+            gui.visibleEntities = get.next();
+        }
+        if (indices.dailyTank) {
+            let dailyTank = JSON.parse(get.next());
+            gui.dailyTank.tank = dailyTank[0];
+            gui.dailyTank.ads = dailyTank[1];
+        }
     },
     broadcast: () => {
         let all = get.all();
@@ -793,7 +800,6 @@ const protocols = {
     "https:": "wss://"
 };
 let incoming = async function(message, socket) {
-    global.loggers.socketMaster.set();
     await new Promise(Resolve => setTimeout(Resolve, window.fakeLagMS));
     // Make sure it looks legit.
     global.bandwidth.currentFa += message.data.byteLength;
@@ -819,9 +825,8 @@ let incoming = async function(message, socket) {
 
 
             case 'w': { // welcome to the game
-                if (m[0]) { // Ask to spawn
-                    socket.talk('s', global.playerName, 1, 1 * config.game.autoLevelUp, global.bodyID ? global.bodyID : false);
-                    global.bodyID = undefined;
+                if (m[0]) { // Ask to get the room data first
+                    socket.talk('s', "", 1, 0, false);
                 }
             }; break;
             case 'R': { // room setup
@@ -836,8 +841,9 @@ let incoming = async function(message, socket) {
                 let blackoutData = JSON.parse(m[5]);
                 global.advanced.blackout.active = blackoutData.active;
                 global.advanced.blackout.color = blackoutData.color;
-                global.advanced.radial = m[6];
-                global.advanced.roundMap = m[7] == "circle" ? true : false;
+                global.advanced.roundMap = m[6] == "circle" ? true : false;
+                // Start syncing
+                socket.talk('S', getNow());
             } break;
             case "r": {
                 global.gameWidth = m[0];
@@ -878,30 +884,43 @@ let incoming = async function(message, socket) {
                     delta: delta,
                     latency: laten,
                 });
-                // Do it again a couple of times
+                // Do it again a couple times
                 if (sync.length < 10) {
                     // Erase entities if resync is needed.
                     if (startSettings.neededtoresync) global.entities = [];
                     // Wait a bit just to space things out
-                    setTimeout(() => { socket.talk('S', Date.now() - clockDiff - serverStart) }, 25);
+                    setTimeout(() => socket.talk('S', getNow()), 10);
                 } else {
                     // Calculate the clock error
-                    sync.sort((b, a) => b.latency - a.latency);
-                    let a = sync[Math.floor(sync.length / 2)].latency,
-                        d = Math.sqrt(sync.map(b => b.latency -
-                            a).map(b => b * b).reduce((b, a) => b + a, 0) / sync.length);
-                    delta = sync.filter(b => Math.abs(b.latency - a) < d).map(b => b.delta);
-                    clockDiff = Math.round(delta.reduce((b, a) => b + a, 0) / delta.length);
+                    sync.sort((e, f) => e.latency - f.latency);
+                    let median = sync[Math.floor(sync.length / 2)].latency;
+                    let sd = 0,
+                        sum = 0,
+                        valid = 0;
+                    for (let e of sync) {
+                        sd += Math.pow(e.latency - median, 2);
+                    }
+                    sd = Math.sqrt(sd / sync.length);
+                    for (let e of sync) {
+                        if (Math.abs(e.latency - median) < sd) {
+                            sum += e.delta;
+                            valid++;
+                        }
+                    }
+                    clockDiff = Math.round(sum / valid);
                     if (startSettings.neededtoresync) {
                         startSettings.neededtoresync = false;
                         startSettings.allowtostartgame = true;
                         global.pullSkillBar = false;
                         global.pullUpgradeMenu = false;
-                        socket.talk("NWB"); // Ask for a new broadcast.
+                        socket.talk("NWB"); // Ask for new broadcast.
                     }
-                    global.gameUpdate = true;
                     global.metrics.rendertimes = 1;
                     util.pullTotalPlayers();
+                    global.gameUpdate = true;
+                    // Now we can ask for spawn.
+                    socket.talk('s', global.playerName, 0, 1 * config.game.autoLevelUp, global.bodyID ? global.bodyID : false);
+                    global.bodyID = undefined;
                 }
             } break;
         case 'm': { // message
@@ -944,6 +963,11 @@ let incoming = async function(message, socket) {
                 theshit = m.slice(7);
                 // More stuff
                 let defaultFov = 2000;
+            if (!global.gameStart && startSettings.allowtostartgame) {
+                // Start the game
+                global.gameStart = true;
+                global.gameConnecting = false;
+            };
             // Process the data
             if (camtime > global.player.lastUpdate) { // Don't accept out-of-date information.
                 if (startSettings.neededtoresync) return; // Do not update anything when the client is out of sync.
@@ -987,21 +1011,10 @@ let incoming = async function(message, socket) {
             } else {
                 console.log("Old data! Last given time: " + global.player.time + "; offered packet timestamp: " + camtime + ".");
             }
-            if (!global.gameStart && startSettings.allowtostartgame) {
-                // Start the game
-                global.gameStart = true;
-                global.gameConnecting = false;
-            };
             // Send the downlink and the target
             socket.talk('d', Math.max(global.player.lastUpdate, camtime));
             socket.cmd.talk();
             global.updateTimes++; // metrics
-
-            // Start the syncing process
-            if (!global.gameUpdate && !startedSync) startedSync = true, socket.talk('S', getNow());
-        } break;
-        case 'T': {
-            global.generateTankTree = true;
         } break;
         case "b": {
             if (startSettings.neededtoresync) return;
@@ -1062,6 +1075,65 @@ let incoming = async function(message, socket) {
                 global.syncingWithTank = false;
             }
         } break;
+        case 'DTA': {
+            let data = JSON.parse(m[0]);
+            if (data.waitTime == "isVideo") {
+                let renderDoc = document.createElement("video");
+                renderDoc.onloadeddata = function() {
+                    renderDoc.muted = false;
+                    renderDoc.volume = 1;
+                    global.dailyTankAd.isVideo = true;
+                    global.dailyTankAd.render = renderDoc;
+                    global.dailyTankAd.orginWidth = global.dailyTankAd.width;
+                    global.dailyTankAd.orginHeight = global.dailyTankAd.height;
+                    if (!data.normalAdSize) {
+                        global.dailyTankAd.width = this.videoWidth;
+                        global.dailyTankAd.height = this.videoHeight;
+                    }
+                    socket.talk("DTAST", renderDoc.duration);
+                };
+                renderDoc.onerror = () => {
+                    global.dailyTankAd.renderUI = false;
+                    global.createMessage("Failed to load the ad!");
+                }
+                renderDoc.src = `./img/ads/${data.src}`;
+            } else {
+                let renderDoc = new Image();
+                renderDoc.onload = () => {
+                    global.dailyTankAd.render = renderDoc;
+                    global.dailyTankAd.orginWidth = global.dailyTankAd.width;
+                    global.dailyTankAd.orginHeight = global.dailyTankAd.height;
+                    if (!data.normalAdSize) {
+                        global.dailyTankAd.width = renderDoc.width;
+                        global.dailyTankAd.height = renderDoc.height;
+                    }
+                    global.dailyTankAd.readyToRender = true;
+                    setTimeout(() => {
+                        global.dailyTankAd.closeable = true;
+                    }, `${data.waitTime}000`);
+                }
+                renderDoc.onerror = () => {
+                    global.dailyTankAd.renderUI = false;
+                    global.createMessage("Failed to load the ad!");
+                }
+                renderDoc.src = `./img/ads/${data.src}`;
+            }
+            global.dailyTankAd.renderUI = true;
+        } break;
+        case 'DTAD': {
+            if (global.dailyTankAd.requestInterval) clearInterval(global.dailyTankAd.requestInterval)
+            global.dailyTankAd.exit();
+        } break;
+        case 'DTAST': {
+            global.dailyTankAd.render.onended = () => {
+                global.dailyTankAd.requestInterval = setInterval(() => {
+                    socket.talk("DTAD");
+                }, 2000)
+                socket.talk("DTAD");
+            }
+            global.dailyTankAd.render.play();
+            global.dailyTankAd.readyToRender = true;
+        } break;
         case 'SH': {
             let data = JSON.parse(m[0]);
             if (data.type == "camera") { // If the server wants to shake our camera...
@@ -1103,6 +1175,7 @@ let incoming = async function(message, socket) {
             // Close the socket
             socket.onclose = () => { };
             socket.close();
+            global.dailyTankAd.exit();
             socket.open = false;
             clearInterval(socket.commandCycle);
             global.gameStart = false;
@@ -1124,7 +1197,11 @@ let incoming = async function(message, socket) {
             // Reconnect server
             global.reconnect();
         } break;
-
+        case 'T': {
+            global.generateTankTree = true;
+            global.renderTankTree = true;
+        } break;
+        
         case 'K': { // kicked
             // Put your code while being kicked from the server. 
         } break;
@@ -1175,7 +1252,6 @@ let incoming = async function(message, socket) {
             }
         } break;
     };
-    global.loggers.socketMaster.mark();
 }
 const socketInit = () => {
     window.resizeEvent();
@@ -1246,6 +1322,7 @@ const socketInit = () => {
         if (!global.gameLoading) return;
         clearInterval(socket.commandCycle);
         clearInterval(global.socketMotionCycle);
+        if (global.dailyTankAd.render) global.dailyTankAd.exit();
         socket.open = false;
         global.disconnected = true;
     };
@@ -1288,7 +1365,6 @@ global.resetSocket = () => {
     minimapTeamInt.elements = {};
     leaderboard.entries = {};
     leaderboardInt.reset();
-    startedSync = false;
     global.socket = [];
 };
 
@@ -1307,7 +1383,6 @@ global.reconnectSocket = () => {
     minimapTeamInt.elements = {};
     leaderboard.entries = {};
     leaderboardInt.reset();
-    startedSync = false;
     global.socket = [];
     global.socket = socketInit();
 }
